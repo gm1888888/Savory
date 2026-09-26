@@ -5,6 +5,7 @@ import { useActionState, useState } from "react";
 import { AlertCircle, Check, Loader2, X } from "lucide-react";
 
 import { registerAction, type AuthState } from "@/app/actions/auth";
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,7 +52,16 @@ export function RegisterForm() {
   const [password, setPassword] = useState("");
 
   return (
-    <form action={formAction} className="space-y-4">
+    <div className="space-y-5">
+      <GoogleSignInButton />
+
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <span className="h-px flex-1 bg-border" />
+        or register with email
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
+      <form action={formAction} className="space-y-4">
       {state.message ? (
         <div
           role="alert"
@@ -146,6 +156,7 @@ export function RegisterForm() {
           Log in
         </Link>
       </p>
-    </form>
+      </form>
+    </div>
   );
 }

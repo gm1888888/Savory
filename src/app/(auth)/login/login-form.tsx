@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { AlertCircle, Loader2 } from "lucide-react";
 
 import { loginAction, type AuthState } from "@/app/actions/auth";
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +18,16 @@ export function LoginForm({ next }: { next: string }) {
   const errors = state.errors ?? {};
 
   return (
-    <form action={formAction} className="space-y-4">
+    <div className="space-y-5">
+      <GoogleSignInButton next={next} />
+
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <span className="h-px flex-1 bg-border" />
+        or log in with email
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
+      <form action={formAction} className="space-y-4">
       <input type="hidden" name="next" value={next} />
 
       {state.message ? (
@@ -79,6 +89,7 @@ export function LoginForm({ next }: { next: string }) {
           Register
         </Link>
       </p>
-    </form>
+      </form>
+    </div>
   );
 }

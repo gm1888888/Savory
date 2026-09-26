@@ -71,7 +71,7 @@ export const profileSchema = z.object({
     .string()
     .nullable()
     .optional()
-    .refine((url) => !url || isSupabaseStorageUrl(url), {
+    .refine((url) => !url || isAllowedAvatarUrl(url), {
       message: "Avatar must be uploaded through this site.",
     }),
   avatarPath: z.string().nullable().optional(),
@@ -174,6 +174,32 @@ export function isSupabaseStorageUrl(url: string): boolean {
       parsed.protocol === "https:" &&
       parsed.hostname === projectHost &&
       parsed.pathname.startsWith("/storage/v1/object/public/")
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Hosts allowed for a PROFILE avatar beyond this project's own storage.
+ *
+ * Google Sign-In populates a new user's avatar_url straight from Google's
+ * profile-photo CDN (via the handle_new_user() trigger, not through this
+ * validation layer). If that same value is later resubmitted unchanged by
+ * the profile-edit form, isSupabaseStorageUrl alone would reject it --
+ * locking a Google user out of editing their own profile. Recipe photos
+ * (isSupabaseStorageUrl, used by recipeSchema) intentionally stay stricter:
+ * there is no legitimate external source for those.
+ */
+const TRUSTED_EXTERNAL_AVATAR_HOSTS = ["lh3.googleusercontent.com"];
+
+export function isAllowedAvatarUrl(url: string): boolean {
+  if (isSupabaseStorageUrl(url)) return true;
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === "https:" &&
+      TRUSTED_EXTERNAL_AVATAR_HOSTS.includes(parsed.hostname)
     );
   } catch {
     return false;

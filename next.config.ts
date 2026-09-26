@@ -28,13 +28,20 @@ const host = supabaseHostname();
  */
 function securityHeaders() {
   const supabaseConnect = host ? "https://" + host : "https://*.supabase.co";
+  // React's dev-mode debugging tools (component stack reconstruction, Fast
+  // Refresh) use eval() -- React's own docs guarantee it is NEVER used in
+  // production builds, so this stays out of the production policy.
+  const scriptSrc =
+    process.env.NODE_ENV === "development"
+      ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+      : "script-src 'self' 'unsafe-inline'";
   const csp = [
     "default-src 'self'",
     "base-uri 'self'",
     "frame-ancestors 'self'",
     // unsafe-inline is required for Next.js's inline hydration/style tags;
     // there is no inline <script> executing untrusted content in this app.
-    "script-src 'self' 'unsafe-inline'",
+    scriptSrc,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https://*.supabase.co https://*.supabase.in",
     "font-src 'self' data:",

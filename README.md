@@ -171,7 +171,41 @@ from overwriting or deleting someone else's photos.
 ## 8. Authentication settings
 
 Go to **Authentication -> Sign In / Providers** and make sure **Email** is
-enabled. That is the only provider this project uses.
+enabled.
+
+### Google Sign-In ("Continue with Google")
+
+The app already has a Google button on the login and register pages -- it
+does nothing until you complete these two steps.
+
+**1. Create a Google OAuth client:**
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+   and create a project (or pick an existing one).
+2. **Create Credentials -> OAuth client ID**. If prompted, configure the
+   consent screen first (External, add your app name -- it can stay in
+   "Testing" mode for a class project).
+3. Application type: **Web application**.
+4. Under **Authorized redirect URIs**, add your Supabase project's callback
+   URL, found in Supabase under **Authentication -> Providers -> Google**:
+   ```
+   https://<your-project-ref>.supabase.co/auth/v1/callback
+   ```
+5. Click **Create**. Copy the **Client ID** and **Client secret**.
+
+**2. Enable it in Supabase:**
+
+1. **Authentication -> Sign In / Providers -> Google**, toggle it on.
+2. Paste in the **Client ID** and **Client secret** from step 1, save.
+
+That's it -- no code change needed. `signInWithOAuth` redirects to Google,
+then back to the same `/auth/callback` route the email-confirmation link
+uses, which creates the session. The `handle_new_user()` trigger already
+populates the new profile's name and avatar from Google's account data.
+
+> Until both steps are done, clicking the button shows a
+> "provider is not enabled" error from Supabase -- that is expected, not a
+> bug in the app.
 
 ### Email confirmation
 
