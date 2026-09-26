@@ -63,6 +63,8 @@ const UNSAFE_FILTER_CHARS = [
   "(",
   ")",
   "%",
+  "_", // ILIKE's single-character wildcard -- stripped so it can't be used
+       // to broadly match and defeat the trigram index.
   "{",
   "}",
   "*",

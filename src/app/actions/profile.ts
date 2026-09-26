@@ -5,7 +5,11 @@ import { revalidatePath } from "next/cache";
 import { PROFILE_IMAGE_BUCKET } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
 import { removeImage } from "@/lib/storage";
-import { fieldErrors, profileSchema } from "@/lib/validation";
+import {
+  fieldErrors,
+  isOwnedStoragePath,
+  profileSchema,
+} from "@/lib/validation";
 
 export type ProfileFormState = {
   errors?: Record<string, string>;
@@ -49,6 +53,10 @@ export async function updateProfileAction(
   const newAvatarPath = parsed.data.avatarPath || null;
   const oldAvatarPath = existing?.avatar_path ?? null;
 
+  if (!isOwnedStoragePath(newAvatarPath, user.id)) {
+    return { message: "That image does not belong to your account." };
+  }
+
   const { error } = await supabase
     .from("profiles")
     .update({
@@ -61,7 +69,7 @@ export async function updateProfileAction(
 
   if (error) {
     console.error("[profile] update failed:", error.message);
-    return { message: error.message };
+    return { message: "Could not save your profile. Please try again." };
   }
 
   // Only once the row points at the new image is the old one safe to delete.

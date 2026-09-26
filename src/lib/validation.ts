@@ -5,6 +5,7 @@ import {
   CATEGORIES,
   MAX_IMAGE_BYTES,
 } from "@/lib/constants";
+import { supabaseUrl } from "@/lib/supabase/env";
 
 /*
  * Every one of these schemas runs on the server, inside the Server Action,
@@ -45,6 +46,16 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required."),
 });
 
+/**
+ * Every recipe/comment id a Server Action receives comes straight from a
+ * client-supplied argument. It is never string-concatenated into a query
+ * (Supabase parameterises `.eq()`), so a malformed value cannot inject SQL --
+ * but validating it here means a bad id is rejected with a clean error
+ * instead of surfacing a raw Postgres "invalid input syntax for type uuid"
+ * message to the caller.
+ */
+export const uuidSchema = z.uuid("That id is not valid.");
+
 export const profileSchema = z.object({
   fullName: z
     .string()
@@ -56,7 +67,13 @@ export const profileSchema = z.object({
     .trim()
     .max(300, "Bio must be 300 characters or fewer.")
     .optional(),
-  avatarUrl: z.string().nullable().optional(),
+  avatarUrl: z
+    .string()
+    .nullable()
+    .optional()
+    .refine((url) => !url || isSupabaseStorageUrl(url), {
+      message: "Avatar must be uploaded through this site.",
+    }),
   avatarPath: z.string().nullable().optional(),
 });
 
@@ -97,7 +114,13 @@ export const recipeSchema = z.object({
     .min(1, "Add at least one step.")
     .max(100, "That is a lot of steps -- 100 maximum."),
   tags: z.array(z.string().trim().min(1).max(24)).max(10, "Up to 10 tags."),
-  imageUrl: z.string().nullable().optional(),
+  imageUrl: z
+    .string()
+    .nullable()
+    .optional()
+    .refine((url) => !url || isSupabaseStorageUrl(url), {
+      message: "Recipe photo must be uploaded through this site.",
+    }),
   imagePath: z.string().nullable().optional(),
 });
 
@@ -129,6 +152,49 @@ export function validateImageFile(file: File): string | null {
     return `That image is too large. Maximum size is ${mb} MB.`;
   }
   return null;
+}
+
+/**
+ * True only for a URL hosted on THIS project's Supabase Storage.
+ *
+ * The avatar component (Radix's AvatarImage) renders a plain <img>, which
+ * bypasses next/image's remotePatterns host allow-list entirely -- that
+ * allow-list only constrains next/image, not raw <img> tags. Without this
+ * check, a user could set their avatar to any external URL (an off-site
+ * tracking pixel, for instance) and every viewer's browser would fetch it
+ * directly, leaking their IP and referrer. Checking against the project's
+ * OWN host (not just any *.supabase.co) also closes the narrower gap where
+ * a value could reference public storage on a different Supabase project.
+ */
+export function isSupabaseStorageUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const projectHost = new URL(supabaseUrl).hostname;
+    return (
+      parsed.protocol === "https:" &&
+      parsed.hostname === projectHost &&
+      parsed.pathname.startsWith("/storage/v1/object/public/")
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * True when a storage object path lives inside the given user's own folder.
+ *
+ * Storage RLS already enforces this for writes/deletes (see
+ * supabase/schema.sql), so this cannot be used to touch another user's
+ * blob -- but without this check a user could still make their own recipe
+ * ROW reference someone else's already-public photo (content spoofing).
+ * Paths are always written by uploadImage() as `${userId}/${uuid}.${ext}`.
+ */
+export function isOwnedStoragePath(
+  path: string | null | undefined,
+  userId: string,
+): boolean {
+  if (!path) return true; // no image is always allowed
+  return path.startsWith(userId + "/");
 }
 
 /** Flattens a ZodError into the `{ field: message }` shape the forms render. */

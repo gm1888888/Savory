@@ -6,12 +6,45 @@ import { redirect } from "next/navigation";
 import { RECIPE_IMAGE_BUCKET } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
 import { removeImage } from "@/lib/storage";
-import { fieldErrors, recipeSchema } from "@/lib/validation";
+import {
+  fieldErrors,
+  isOwnedStoragePath,
+  recipeSchema,
+  uuidSchema,
+} from "@/lib/validation";
 
 export type RecipeFormState = {
   errors?: Record<string, string>;
   message?: string | null;
 };
+
+/**
+ * Minimum time a user must wait between publishing recipes.
+ *
+ * There is no rate-limiting infrastructure (Redis/Upstash) in this project,
+ * so this is a deliberately simple, DB-only cooldown: read the user's most
+ * recent recipe and refuse if it was created too recently. It stops a
+ * scripted flood without any new schema or external service.
+ */
+const RECIPE_COOLDOWN_SECONDS = 5;
+
+async function isPastCooldown(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  seconds: number,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("recipes")
+    .select("created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!data) return true;
+  const elapsedMs = Date.now() - new Date(data.created_at).getTime();
+  return elapsedMs >= seconds * 1000;
+}
 
 /** Pulls the repeated ingredient/instruction/tag fields out of the form. */
 function listFrom(formData: FormData, key: string): string[] {
@@ -57,6 +90,17 @@ export async function createRecipeAction(
   }
 
   const input = parsed.data;
+
+  if (!isOwnedStoragePath(input.imagePath, user.id)) {
+    return { message: "That image does not belong to your account." };
+  }
+
+  if (!(await isPastCooldown(supabase, user.id, RECIPE_COOLDOWN_SECONDS))) {
+    return {
+      message: "You are publishing recipes too quickly. Please wait a moment and try again.",
+    };
+  }
+
   const { data, error } = await supabase
     .from("recipes")
     .insert({
@@ -79,7 +123,7 @@ export async function createRecipeAction(
 
   if (error || !data) {
     console.error("[recipes] create failed:", error?.message);
-    return { message: error?.message ?? "Could not publish the recipe." };
+    return { message: "Could not publish the recipe. Please try again." };
   }
 
   revalidatePath("/");
@@ -93,6 +137,10 @@ export async function updateRecipeAction(
   _prev: RecipeFormState,
   formData: FormData,
 ): Promise<RecipeFormState> {
+  if (!uuidSchema.safeParse(recipeId).success) {
+    return { message: "That recipe no longer exists." };
+  }
+
   const parsed = parseRecipeForm(formData);
   if (!parsed.success) {
     return { errors: fieldErrors(parsed.error) };
@@ -123,6 +171,11 @@ export async function updateRecipeAction(
   }
 
   const input = parsed.data;
+
+  if (!isOwnedStoragePath(input.imagePath, user.id)) {
+    return { message: "That image does not belong to your account." };
+  }
+
   const newPath = input.imagePath || null;
   const oldPath = existing.image_path;
 
@@ -148,7 +201,7 @@ export async function updateRecipeAction(
 
   if (error) {
     console.error("[recipes] update failed:", error.message);
-    return { message: error.message };
+    return { message: "Could not save your changes. Please try again." };
   }
 
   // Only remove the old blob once the row has been updated successfully.
@@ -164,6 +217,10 @@ export async function updateRecipeAction(
 }
 
 export async function deleteRecipeAction(recipeId: string): Promise<void> {
+  if (!uuidSchema.safeParse(recipeId).success) {
+    return;
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -192,7 +249,7 @@ export async function deleteRecipeAction(recipeId: string): Promise<void> {
 
   if (error) {
     console.error("[recipes] delete failed:", error.message);
-    throw new Error(error.message);
+    throw new Error("Could not delete the recipe. Please try again.");
   }
 
   // Row is gone; the blob is best-effort. An orphaned file is preferable to

@@ -1,6 +1,7 @@
 import { LoginForm } from "./login-form";
 import { Logo } from "@/components/shared/logo";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { safeNextPath } from "@/lib/safe-redirect";
 
 export const metadata = {
   title: "Log in",
@@ -9,9 +10,9 @@ export const metadata = {
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const params = await searchParams;
-  const rawNext = params.next;
-  const next =
-    typeof rawNext === "string" && rawNext.startsWith("/") ? rawNext : "/";
+  // safeNextPath rejects protocol-relative values ("//evil.com") that a
+  // plain startsWith("/") check would let through as an open redirect.
+  const next = safeNextPath(params.next);
 
   return (
     <Card className="border-border/80 shadow-sm">

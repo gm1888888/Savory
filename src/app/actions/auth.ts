@@ -6,20 +6,52 @@ import { headers } from "next/headers";
 
 import { loginSchema, registerSchema, fieldErrors } from "@/lib/validation";
 import { createClient } from "@/lib/supabase/server";
+import { safeNextPath } from "@/lib/safe-redirect";
 
 export type AuthState = {
   errors?: Record<string, string>;
   message?: string | null;
 };
 
-/** Resolves the site origin for email confirmation links. */
+/**
+ * Resolves the site origin for email confirmation links.
+ *
+ * The `x-forwarded-host` fallback only runs in development. Trusting a
+ * request header for a production confirmation-email link is a real risk
+ * (an attacker-influenced Host header could redirect the one-time code to
+ * an off-site page) -- production must set NEXT_PUBLIC_SITE_URL explicitly.
+ */
 async function siteOrigin(): Promise<string> {
   const configured = process.env.NEXT_PUBLIC_SITE_URL;
   if (configured) return configured.replace(/[/]+$/, "");
+
+  if (process.env.NODE_ENV === "production") {
+    // Fail loudly rather than silently trust an unvalidated header in prod.
+    console.error(
+      "[auth] NEXT_PUBLIC_SITE_URL is not set in production. " +
+        "Falling back to localhost -- confirmation links will be broken. " +
+        "Set NEXT_PUBLIC_SITE_URL in your deployment environment.",
+    );
+    return "http://localhost:3000";
+  }
+
   const headerList = await headers();
   const host = headerList.get("x-forwarded-host") ?? headerList.get("host");
   const proto = headerList.get("x-forwarded-proto") ?? "https";
   return host ? proto + "://" + host : "http://localhost:3000";
+}
+
+/** Maps a raw Supabase Auth error into a message safe to show a visitor. */
+function friendlyAuthError(message: string): string {
+  if (message.toLowerCase().includes("already registered")) {
+    return "That email is already registered. Try logging in instead.";
+  }
+  if (message.toLowerCase().includes("password")) {
+    // Supabase's own password-strength messages are already user-safe.
+    return message;
+  }
+  console.error("[auth] signUp failed:", message);
+  return "We could not create your account right now. Please try again.";
 }
 
 export async function registerAction(
@@ -51,7 +83,7 @@ export async function registerAction(
   });
 
   if (error) {
-    return { message: error.message };
+    return { message: friendlyAuthError(error.message) };
   }
 
   // With email confirmation enabled Supabase returns a user but no session.
@@ -92,9 +124,9 @@ export async function loginAction(
     return { message };
   }
 
-  const nextParam = formData.get("next");
-  const next =
-    typeof nextParam === "string" && nextParam.startsWith("/") ? nextParam : "/";
+  // safeNextPath rejects protocol-relative values like "//evil.com" that
+  // pass a naive startsWith("/") check but browsers resolve as off-site.
+  const next = safeNextPath(formData.get("next"));
 
   revalidatePath("/", "layout");
   redirect(next);
