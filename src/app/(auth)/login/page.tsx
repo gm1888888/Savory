@@ -28,6 +28,14 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
         </div>
       </CardHeader>
       <CardContent>
+        {params.expired === "1" ? (
+          <p
+            role="status"
+            className="mb-5 rounded-lg border border-border bg-muted/50 px-3.5 py-3 text-sm text-muted-foreground"
+          >
+            Your login expired after 7 days. Please log in again to continue.
+          </p>
+        ) : null}
         <LoginForm next={next} />
       </CardContent>
     </Card>
