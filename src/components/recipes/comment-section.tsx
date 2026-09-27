@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { MessageCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -22,10 +21,14 @@ type CommentSectionProps = {
 
 export function CommentSection({
   recipeId,
-  comments,
+  comments: initialComments,
   currentUserId,
 }: CommentSectionProps) {
-  const router = useRouter();
+  // Kept in local state and updated directly on add/delete, rather than
+  // asking Next.js to re-render the whole page (revalidatePath + a server
+  // refresh) just to reflect one new comment -- that felt like a full
+  // page reload, which is exactly what this avoids.
+  const [comments, setComments] = useState(initialComments);
   const formRef = useRef<HTMLFormElement>(null);
   const [pending, startTransition] = useTransition();
   const [value, setValue] = useState("");
@@ -36,14 +39,14 @@ export function CommentSection({
 
     startTransition(async () => {
       const result = await addCommentAction(recipeId, formData);
-      if (!result.ok) {
+      if (!result.ok || !result.comment) {
         toast.error(result.message ?? "Could not post your comment.");
         return;
       }
+      setComments((current) => [...current, result.comment!]);
       setValue("");
       formRef.current?.reset();
       toast.success("Comment posted.");
-      router.refresh();
     });
   }
 
@@ -53,8 +56,8 @@ export function CommentSection({
       toast.error(result.message ?? "Could not delete the comment.");
       return;
     }
+    setComments((current) => current.filter((comment) => comment.id !== commentId));
     toast.success("Comment deleted.");
-    router.refresh();
   }
 
   return (

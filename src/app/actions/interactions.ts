@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import type { CommentWithAuthor } from "@/lib/database.types";
 import { createClient } from "@/lib/supabase/server";
 import { commentSchema, uuidSchema } from "@/lib/validation";
 
@@ -12,7 +13,11 @@ export type ToggleResult = {
   message?: string;
 };
 
-export type CommentResult = { ok: boolean; message?: string };
+export type CommentResult = {
+  ok: boolean;
+  message?: string;
+  comment?: CommentWithAuthor;
+};
 
 /*
  * Likes and bookmarks are real rows, not counters. The unique constraints in
@@ -178,19 +183,26 @@ export async function addCommentAction(
     };
   }
 
-  const { error } = await supabase.from("comments").insert({
-    recipe_id: recipeId,
-    user_id: user.id,
-    content: parsed.data.content,
-  });
+  // Select the row straight back (joined with the author's profile) so the
+  // client can append it to the comment list locally -- no full-page refresh
+  // needed just to show the one comment that was added.
+  const { data, error } = await supabase
+    .from("comments")
+    .insert({
+      recipe_id: recipeId,
+      user_id: user.id,
+      content: parsed.data.content,
+    })
+    .select("*, profiles ( id, full_name, avatar_url )")
+    .single();
 
-  if (error) {
-    console.error("[comments] insert failed:", error.message);
+  if (error || !data) {
+    console.error("[comments] insert failed:", error?.message);
     return { ok: false, message: "Could not post your comment. Please try again." };
   }
 
   revalidatePath("/recipes/" + recipeId);
-  return { ok: true };
+  return { ok: true, comment: data as unknown as CommentWithAuthor };
 }
 
 export async function deleteCommentAction(
