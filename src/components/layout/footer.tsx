@@ -16,8 +16,6 @@ const ABOUT = [
 ];
 
 export function Footer() {
-  const year = new Date().getFullYear();
-
   return (
     <footer className="mt-auto border-t border-border bg-muted/30">
       <div className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6">
@@ -78,11 +76,6 @@ export function Footer() {
             </ul>
           </div>
         </div>
-
-        <p className="mt-10 border-t border-border pt-6 text-xs text-muted-foreground">
-          Savory -- a student group project. Built with Next.js and Supabase.
-          Copyright {year}.
-        </p>
       </div>
     </footer>
   );
