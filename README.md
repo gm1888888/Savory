@@ -183,8 +183,12 @@ does nothing until you complete these two steps.
 1. Go to the [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
    and create a project (or pick an existing one).
 2. **Create Credentials -> OAuth client ID**. If prompted, configure the
-   consent screen first (External, add your app name -- it can stay in
-   "Testing" mode for a class project).
+   consent screen first (User type: External, add your app name and email).
+   This is free -- no billing account is needed for basic sign-in.
+   **Important:** while the consent screen is in "Testing" mode, ONLY Google
+   accounts you add under "Test users" (max 100) can sign in. Either add
+   your groupmates there, or click **Publish app** to open it to everyone
+   (for the basic email/profile scopes this needs no Google review).
 3. Application type: **Web application**.
 4. Under **Authorized redirect URIs**, add your Supabase project's callback
    URL, found in Supabase under **Authentication -> Providers -> Google**:
