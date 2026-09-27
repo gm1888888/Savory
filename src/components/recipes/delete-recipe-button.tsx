@@ -13,6 +13,12 @@ type DeleteRecipeButtonProps = {
   recipeTitle: string;
   /** Where to send the user afterwards. Detail pages cannot stay put. */
   redirectTo?: string;
+  /**
+   * Called after a successful delete when the caller owns a local list (e.g.
+   * "My recipes") and can just remove this one card -- avoids a full-page
+   * refresh that would re-fetch and re-render every other recipe too.
+   */
+  onDeleted?: () => void;
   compact?: boolean;
 };
 
@@ -20,6 +26,7 @@ export function DeleteRecipeButton({
   recipeId,
   recipeTitle,
   redirectTo,
+  onDeleted,
   compact = false,
 }: DeleteRecipeButtonProps) {
   const router = useRouter();
@@ -30,6 +37,8 @@ export function DeleteRecipeButton({
       toast.success("Recipe deleted.");
       if (redirectTo) {
         router.push(redirectTo);
+      } else if (onDeleted) {
+        onDeleted();
       } else {
         router.refresh();
       }
